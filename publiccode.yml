@@ -7,11 +7,10 @@ description:
       - Open Source
       - Government
       - digital workplace
-      - open-source
     genericName: MijnBureau Load Test
     longDescription: |
-      This is the MijnBureau Load Test repo that contain load tests for the MijnBurea deployment.
-
+      k6 load-test scenarios for the MijnBureau deployment, scheduled in-cluster
+      by the k6-operator and exported via Prometheus remote-write.
     shortDescription: MijnBureau load test
 developmentStatus: concept
 legal:
@@ -25,8 +24,8 @@ maintenance:
     - name: Mijn Bureau
       email: opensource@minbzk.nl
   type: community
-name: MijnBureau deployment
+name: MijnBureau Load Test
 platforms:
-  - docs
-softwareType: standalone/web
+  - linux
+softwareType: standalone/other
 url: "https://github.com/MinBZK/mijn-bureau-loadtest"

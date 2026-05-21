@@ -41,15 +41,21 @@ class GitmojiTitle(LineRule):
             if not re.search(depspattern, title):
               return [RuleViolation(self.id, violation_msg, title)]
 
-        # Dynamically generate scopes from folder names in helmfile/apps
-        # Use the repository base directory from the GITLINT_GIT_CONTEXT environment variable if available
+        # Dynamically generate scopes from folder names in scenarios/ (one per target app).
+        # Use the repository base directory from the GITLINT_GIT_CONTEXT environment variable if available.
         base_dir = os.environ.get("GITLINT_GIT_CONTEXT", os.getcwd())
-        apps_dir = os.path.join(base_dir, "helmfile", "apps")
-        scopes = [name for name in os.listdir(apps_dir) if os.path.isdir(os.path.join(apps_dir, name))]
+        scenarios_dir = os.path.join(base_dir, "scenarios")
+        scopes = []
+        if os.path.isdir(scenarios_dir):
+            scopes = [
+                name for name in os.listdir(scenarios_dir)
+                if os.path.isdir(os.path.join(scenarios_dir, name)) and not name.startswith("_")
+            ]
         scopes.append("deps")
         scopes.append("docs")
         scopes.append("tests")
         scopes.append("ci")
+        scopes.append("infra")
         scopes.append("other")
         pattern = r"^({:s})\s?\({:s}\)\s[a-zA-Z].*$".format("|".join(emojis), "|".join(scopes))
         if not re.search(pattern, title):
