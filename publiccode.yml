@@ -1,0 +1,32 @@
+publiccodeYmlVersion: "0.2"
+categories:
+  - it-development
+description:
+  en:
+    features:
+      - Open Source
+      - Government
+      - digital workplace
+      - open-source
+    genericName: MijnBureau Load Test
+    longDescription: |
+      This is the MijnBureau Load Test repo that contain load tests for the MijnBurea deployment.
+
+    shortDescription: MijnBureau load test
+developmentStatus: concept
+legal:
+  license: EUPL-1.2
+localisation:
+  availableLanguages:
+    - en
+  localisationReady: false
+maintenance:
+  contacts:
+    - name: Mijn Bureau
+      email: opensource@minbzk.nl
+  type: community
+name: MijnBureau deployment
+platforms:
+  - docs
+softwareType: standalone/web
+url: "https://github.com/MinBZK/mijn-bureau-loadtest"
