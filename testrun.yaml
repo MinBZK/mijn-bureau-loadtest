@@ -1,0 +1,41 @@
+# TestRun template. Per-scenario values from runs/<app>/<scenario>.env;
+# per-environment BASE_URL + PROMETHEUS_RW_URL from the shell.
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: ${LOAD_TEST_NAME}
+  labels:
+    app.kubernetes.io/name: loadtest
+    testid: ${LOAD_TEST_NAME}
+spec:
+  parallelism: ${PARALLELISM}
+  script:
+    configMap:
+      name: ${SCRIPTS_CONFIGMAP}
+      file: ${SCRIPT_FILE}
+  runner:
+    image: grafana/k6:0.57.0
+    # Do not add runAsNonRoot: kubelet rejects it because grafana/k6's USER is
+    # non-numeric. OpenShift's SCC mutator pins runAsUser at admission.
+    securityContext:
+      seccompProfile:
+        type: RuntimeDefault
+    env:
+      - name: BASE_URL
+        value: "${BASE_URL}"
+      - name: K6_OUT
+        value: experimental-prometheus-rw
+      - name: K6_PROMETHEUS_RW_SERVER_URL
+        value: "${PROMETHEUS_RW_URL}"
+      - name: K6_PROMETHEUS_RW_TREND_STATS
+        value: "p(50),p(95),p(99),min,max,avg"
+    envFrom:
+      - secretRef:
+          name: ${CREDENTIALS_SECRET}
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
