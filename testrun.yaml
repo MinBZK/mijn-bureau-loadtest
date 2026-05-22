@@ -11,6 +11,7 @@ metadata:
     app.kubernetes.io/part-of: mijn-bureau
     testid: ${LOAD_TEST_NAME}
     runid: ${RUN_ID}
+    target_vus: "${TARGET_VUS}"
 spec:
   parallelism: ${PARALLELISM}
   script:
@@ -18,7 +19,7 @@ spec:
       name: ${SCRIPTS_CONFIGMAP}
       file: ${SCRIPT_FILE}
   runner:
-    image: grafana/k6:2.0.0
+    image: grafana/k6:0.57.0
     # Do not add runAsNonRoot: kubelet rejects it because grafana/k6's USER is
     # non-numeric. OpenShift's SCC mutator pins runAsUser at admission.
     securityContext:
@@ -33,6 +34,24 @@ spec:
         value: "${PROMETHEUS_RW_URL}"
       - name: K6_PROMETHEUS_RW_TREND_STATS
         value: "p(50),p(95),p(99),min,max,avg"
+      # Turn k6 script tags (e.g. target_vus) into Prometheus labels so a sweep can be
+      # sliced per load level in Grafana.
+      - name: K6_PROMETHEUS_RW_TAGS_AS_LABELS
+        value: "true"
+      # Load knobs read by the scenarios (ramp→plateau); empty falls back to script defaults.
+      - name: TARGET_VUS
+        value: "${TARGET_VUS}"
+      - name: RAMP_UP
+        value: "${RAMP_UP}"
+      - name: HOLD
+        value: "${HOLD}"
+      - name: RAMP_DOWN
+        value: "${RAMP_DOWN}"
+      # Seed/unseed knobs (seed.ts).
+      - name: SEED_MODE
+        value: "${SEED_MODE}"
+      - name: SEED_DOC_COUNT
+        value: "${SEED_DOC_COUNT}"
     envFrom:
       - secretRef:
           name: ${CREDENTIALS_SECRET}

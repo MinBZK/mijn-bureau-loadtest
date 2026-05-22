@@ -1,15 +1,11 @@
-// Ramps concurrent VUs uploading a fixed-size file. The breaking point shows up
-// as a jump in http_req_failed or a cliff in http_req_duration_p95 at the VU
-// count where Nextcloud (PHP-FPM workers, DB connections, MinIO write contention)
-// starts shedding work.
+// Ramps concurrent VUs listing orgs via the Grist REST API (Bearer API key). Grist is a Node app
+// fronting a SQLite DB per document; this read path is CPU-bound (app + event loop). The breaking
+// point shows up as a jump in http_req_failed or a cliff in http_req_duration_p95 once the app
+// (after the CPU HPA reaches max replicas) saturates.
 import { check, sleep } from "k6";
-import crypto from "k6/crypto";
-import { validateEnv } from "./_auth.ts";
+import http from "k6/http";
+import { API_BASE, AUTH_HEADER, validateEnv } from "./_auth.ts";
 import { iterationOk, iterationStart } from "./_safety.ts";
-import { mkcol, put } from "./_webdav.ts";
-
-const FOLDER = "/loadtest-concurrency-ramp";
-const SIZE_BYTES = 1024 * 1024; // 1 MB
 
 const TARGET_VUS: number = parseInt(__ENV.TARGET_VUS || "25", 10);
 
@@ -33,15 +29,16 @@ export const options = {
 
 export function setup(): void {
   validateEnv();
-  mkcol(FOLDER);
 }
 
 export default function (): void {
   iterationStart();
-  const filename = `cr-vu${__VU}-${__ITER}-${Date.now()}.bin`;
-  const res = put(`${FOLDER}/${filename}`, crypto.randomBytes(SIZE_BYTES));
+  const res = http.get(`${API_BASE}/orgs`, {
+    headers: { Authorization: AUTH_HEADER },
+    tags: { verb: "ORGS" },
+  });
   const ok = check(res, {
-    "PUT 2xx": (r) => r.status >= 200 && r.status < 300,
+    "orgs 200": (r) => r.status === 200,
   });
   if (ok) iterationOk();
   sleep(1);
