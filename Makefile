@@ -6,7 +6,7 @@ NS ?= loadtest
 .PHONY: help setup install-scenarios run logs clean
 
 help:
-	@echo "Required shell vars: BASE_URL, PROMETHEUS_RW_URL"
+	@echo "Required shell vars: TARGET_URL, PROMETHEUS_RW_URL"
 	@echo ""
 	@echo "One-time per cluster (manual): install the k6-operator. See README."
 	@echo ""
@@ -36,8 +36,12 @@ run:
 	@: $${app:?app=<name> required — run 'make help' for usage}
 	@: $${scenario:?scenario=<name> required — run 'make help' for usage}
 	@source runs/$(app)/$(scenario).env && \
-	  for v in BASE_URL PROMETHEUS_RW_URL LOAD_TEST_NAME PARALLELISM \
-	           SCRIPTS_CONFIGMAP SCRIPT_FILE CREDENTIALS_SECRET; do \
+	  export SCENARIO=$(scenario) && \
+	  export RUN_ID=$$(date +%Y%m%d-%H%M%S) && \
+	  for v in TARGET_URL PROMETHEUS_RW_URL LOAD_TEST_NAME PARALLELISM \
+	           SCRIPTS_CONFIGMAP SCRIPT_FILE CREDENTIALS_SECRET \
+	           RUNNER_CPU_REQUEST RUNNER_CPU_LIMIT \
+	           RUNNER_MEMORY_REQUEST RUNNER_MEMORY_LIMIT; do \
 	    : "$${!v:?$$v must be set (check runs/$(app)/$(scenario).env and .env.local)}"; \
 	  done && \
 	  envsubst < testrun.yaml | kubectl apply -n $(NS) -f -

@@ -21,7 +21,7 @@ Adding a scenario: one `.ts` under `scenarios/<app>/`, one `.env` under `runs/<a
 
 - Kubernetes cluster with the [k6-operator](https://github.com/grafana/k6-operator) installed
 - [Helm](https://helm.sh/), `envsubst`, GNU `make`
-- `npm install` for the TypeScript type-check (editor + pre-commit; not used at runtime)
+- `npm install` for the TypeScript type-check (editor + CI; not used at runtime)
 
 ## Setup
 

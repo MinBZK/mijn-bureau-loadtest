@@ -1,6 +1,6 @@
 import encoding from "k6/encoding";
 
-const BASE_URL_RAW = __ENV.BASE_URL || "";
+const BASE_URL_RAW = __ENV.TARGET_URL || "";
 const USERNAME = __ENV.NEXTCLOUD_USERNAME || "";
 const APP_PASSWORD = __ENV.NEXTCLOUD_APP_PASSWORD || "";
 
@@ -15,7 +15,7 @@ export const DAV_BASE: string = `${BASE_URL}/remote.php/dav/files/${NEXTCLOUD_US
 export function validateEnv(): void {
   if (!BASE_URL_RAW || !USERNAME || !APP_PASSWORD) {
     throw new Error(
-      "BASE_URL, NEXTCLOUD_USERNAME, NEXTCLOUD_APP_PASSWORD must be set on the TestRun runner",
+      "TARGET_URL, NEXTCLOUD_USERNAME, NEXTCLOUD_APP_PASSWORD must be set on the TestRun runner",
     );
   }
 }

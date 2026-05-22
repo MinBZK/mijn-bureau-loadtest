@@ -1,12 +1,16 @@
 # TestRun template. Per-scenario values from runs/<app>/<scenario>.env;
-# per-environment BASE_URL + PROMETHEUS_RW_URL from the shell.
+# per-environment TARGET_URL + PROMETHEUS_RW_URL from the shell.
 apiVersion: k6.io/v1alpha1
 kind: TestRun
 metadata:
   name: ${LOAD_TEST_NAME}
   labels:
     app.kubernetes.io/name: loadtest
+    app.kubernetes.io/instance: ${LOAD_TEST_NAME}
+    app.kubernetes.io/component: ${SCENARIO}
+    app.kubernetes.io/part-of: mijn-bureau
     testid: ${LOAD_TEST_NAME}
+    runid: ${RUN_ID}
 spec:
   parallelism: ${PARALLELISM}
   script:
@@ -21,8 +25,8 @@ spec:
       seccompProfile:
         type: RuntimeDefault
     env:
-      - name: BASE_URL
-        value: "${BASE_URL}"
+      - name: TARGET_URL
+        value: "${TARGET_URL}"
       - name: K6_OUT
         value: experimental-prometheus-rw
       - name: K6_PROMETHEUS_RW_SERVER_URL
@@ -34,8 +38,8 @@ spec:
           name: ${CREDENTIALS_SECRET}
     resources:
       requests:
-        cpu: 200m
-        memory: 256Mi
+        cpu: ${RUNNER_CPU_REQUEST}
+        memory: ${RUNNER_MEMORY_REQUEST}
       limits:
-        cpu: "1"
-        memory: 512Mi
+        cpu: ${RUNNER_CPU_LIMIT}
+        memory: ${RUNNER_MEMORY_LIMIT}
