@@ -1,0 +1,13 @@
+{
+  "name": "mijn-bureau-loadtest",
+  "private": true,
+  "description": "k6 load-test scenarios for the MijnBureau platform",
+  "license": "EUPL-1.2",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/k6": "^0.57.0",
+    "typescript": "^5.4.0"
+  }
+}

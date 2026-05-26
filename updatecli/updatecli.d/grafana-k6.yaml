@@ -1,0 +1,48 @@
+name: "Update grafana/k6 container tag"
+
+scms:
+  default:
+    kind: "github"
+    spec:
+      user: "{{ .github.user }}"
+      email: "{{ .github.email }}"
+      owner: "{{ .github.owner }}"
+      repository: "{{ .github.repository }}"
+      username: "{{ .github.username }}"
+      branch: "{{ .github.branch }}"
+      commitmessage:
+        title: Bump grafana/k6 version to {{ source "k6_latest_version" }}
+        hidecredit: true
+        squash: true
+        type: "⬆️(deps)"
+
+sources:
+  k6_latest_version:
+    name: "Get latest grafana/k6 tag"
+    kind: dockerimage
+    spec:
+      image: "grafana/k6"
+      architecture: amd64
+      tagfilter: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+      versionfilter:
+        kind: semver
+        pattern: ">0.0.0"
+
+targets:
+  update_k6_image:
+    name: "Update grafana/k6 image"
+    kind: yaml
+    spec:
+      engine: yamlpath
+      file: "testrun.yaml"
+      key: "$.spec.runner.image"
+    sourceid: k6_latest_version
+    transformers:
+      - addprefix: "grafana/k6:"
+    scmid: default
+
+actions:
+  default:
+    scmid: default
+    kind: github/pullrequest
+    title: ⬆️(deps) Bump grafana/k6 version to {{ source "k6_latest_version" }}

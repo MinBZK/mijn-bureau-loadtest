@@ -1,0 +1,32 @@
+# Egress allow rules. MijnBureau clusters default-deny egress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loadtest-egress
+  labels:
+    app.kubernetes.io/name: loadtest
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # k6-operator starter → runner REST API
+    - to:
+        - podSelector: {}
+      ports:
+        - port: 6565
+          protocol: TCP
+    # HTTPS target apps + HTTPS remote-write endpoints
+    - ports:
+        - port: 443
+          protocol: TCP
+    # Plain-HTTP Prometheus remote-write (sidecar Prometheus)
+    - ports:
+        - port: 9090
+          protocol: TCP
