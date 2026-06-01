@@ -18,7 +18,7 @@ spec:
       name: ${SCRIPTS_CONFIGMAP}
       file: ${SCRIPT_FILE}
   runner:
-    image: grafana/k6:0.57.0
+    image: grafana/k6:2.0.0
     # Do not add runAsNonRoot: kubelet rejects it because grafana/k6's USER is
     # non-numeric. OpenShift's SCC mutator pins runAsUser at admission.
     securityContext:
