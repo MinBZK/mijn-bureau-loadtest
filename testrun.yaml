@@ -34,10 +34,6 @@ spec:
         value: "${PROMETHEUS_RW_URL}"
       - name: K6_PROMETHEUS_RW_TREND_STATS
         value: "p(50),p(95),p(99),min,max,avg"
-      # Turn k6 script tags (e.g. target_vus) into Prometheus labels so a sweep can be
-      # sliced per load level in Grafana.
-      - name: K6_PROMETHEUS_RW_TAGS_AS_LABELS
-        value: "true"
       # Load knobs read by the scenarios (ramp→plateau); empty falls back to script defaults.
       - name: TARGET_VUS
         value: "${TARGET_VUS}"
@@ -45,8 +41,6 @@ spec:
         value: "${RAMP_UP}"
       - name: HOLD
         value: "${HOLD}"
-      - name: RAMP_DOWN
-        value: "${RAMP_DOWN}"
       # Seed/unseed knobs (seed.ts).
       - name: SEED_MODE
         value: "${SEED_MODE}"

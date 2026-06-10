@@ -4,9 +4,6 @@ repos:
     hooks:
       - id: end-of-file-fixer
       - id: check-yaml
-        # `testrun.yaml` and `runs/*/*.env` contain envsubst placeholders that
-        # are valid YAML strings, so --unsafe (skip schema validation) is fine.
-        args: ["--unsafe"]
       - id: check-json
       - id: check-added-large-files
         args: ["--maxkb=700"]

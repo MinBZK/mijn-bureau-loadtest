@@ -6,10 +6,11 @@ import { check, sleep } from "k6";
 import crypto from "k6/crypto";
 import { validateEnv } from "./_auth.ts";
 import { iterationOk, iterationStart } from "./_safety.ts";
-import { mkcol, put } from "./_webdav.ts";
+import { del, mkcol, put } from "./_webdav.ts";
 
 const FOLDER = "/loadtest-concurrency-ramp";
 const SIZE_BYTES = 1024 * 1024; // 1 MB
+const PAYLOAD = crypto.randomBytes(SIZE_BYTES); // one buffer per VU; fresh bytes per PUT would tax the runner
 
 const TARGET_VUS: number = parseInt(__ENV.TARGET_VUS || "25", 10);
 
@@ -22,7 +23,6 @@ export const options = {
         { duration: __ENV.RAMP_UP || "30s", target: TARGET_VUS },
         { duration: __ENV.HOLD || "2m", target: TARGET_VUS },
       ],
-      gracefulRampDown: __ENV.RAMP_DOWN || "30s",
     },
   },
   thresholds: {
@@ -33,16 +33,25 @@ export const options = {
 
 export function setup(): void {
   validateEnv();
-  mkcol(FOLDER);
+  const res = mkcol(FOLDER);
+  if (res.status !== 201 && res.status !== 405) {
+    throw new Error(`MKCOL ${FOLDER} failed: ${res.status}`);
+  }
 }
 
 export default function (): void {
   iterationStart();
   const filename = `cr-vu${__VU}-${__ITER}-${Date.now()}.bin`;
-  const res = put(`${FOLDER}/${filename}`, crypto.randomBytes(SIZE_BYTES));
+  const res = put(`${FOLDER}/${filename}`, PAYLOAD);
   const ok = check(res, {
     "PUT 2xx": (r) => r.status >= 200 && r.status < 300,
   });
   if (ok) iterationOk();
   sleep(1);
+}
+
+export function teardown(): void {
+  // Removes the collection and every uploaded file; they land in the trashbin
+  // until Nextcloud purges it.
+  del(FOLDER);
 }

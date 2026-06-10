@@ -1,7 +1,10 @@
 // Ramps concurrent VUs listing documents via the la-suite Docs REST API (OIDC Bearer access token,
-// fetched in setup()). Docs is a Django/DRF app over Postgres; this read path is CPU + DB-bound. The
-// breaking point shows up as a jump in http_req_failed or a cliff in http_req_duration_p95 once the
-// app (after the CPU HPA reaches max replicas) or the Postgres connection pool saturates.
+// fetched in setup()). Targets the paginated list the UI calls — not documents/all/, whose ceiling
+// proved endpoint-specific (see docs/scaling.md). Needs a seeded dataset (`make seed app=docs`):
+// an empty page only measures the auth middleware. Docs is a Django/DRF app over Postgres; this
+// read path is CPU + DB-bound. The breaking point shows up as a jump in http_req_failed or a cliff
+// in http_req_duration_p95 once the app (after the CPU HPA reaches max replicas) or the Postgres
+// connection pool saturates.
 import { check, sleep } from "k6";
 import http from "k6/http";
 import { getToken, validateEnv } from "./_auth.ts";
@@ -20,7 +23,6 @@ export const options = {
         { duration: __ENV.RAMP_UP || "30s", target: TARGET_VUS },
         { duration: __ENV.HOLD || "2m", target: TARGET_VUS },
       ],
-      gracefulRampDown: __ENV.RAMP_DOWN || "30s",
     },
   },
   thresholds: {
@@ -31,12 +33,22 @@ export const options = {
 
 export function setup(): { token: string } {
   validateEnv();
-  return { token: getToken() };
+  const token = getToken();
+  const res = http.get(`${BASE_URL}/api/v1.0/documents/?page=1`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (res.status !== 200) {
+    throw new Error(`docs list failed: ${res.status}`);
+  }
+  if (((res.json("results") as unknown[]) || []).length === 0) {
+    throw new Error("no documents for the load-test user — run `make seed app=docs` first");
+  }
+  return { token };
 }
 
 export default function (data: { token: string }): void {
   iterationStart();
-  const res = http.get(`${BASE_URL}/api/v1.0/documents/all/?page_size=1`, {
+  const res = http.get(`${BASE_URL}/api/v1.0/documents/?page=1`, {
     headers: { Authorization: `Bearer ${data.token}` },
     tags: { verb: "DOCUMENTS" },
   });

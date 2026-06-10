@@ -53,6 +53,8 @@ run:
 # turn) to produce the 3-5 steady-state points the scaling doc extrapolates from.
 # Each level overrides TARGET_VUS and gets a unique <name>-<vus>v TestRun; metrics are in
 # Prometheus (tagged target_vus) so the CRs are deleted after each level finishes.
+# A level that never reaches stage=finished (e.g. stage=error) still gets its CR deleted,
+# then the sweep aborts.
 sweep:
 	@: $${app:?app=<name> required — run 'make help' for usage}
 	@: $${scenario:?scenario=<name> required — run 'make help' for usage}
@@ -72,9 +74,14 @@ sweep:
 	    export LOAD_TEST_NAME="$${base}-$${vus}v" && \
 	    echo "=== sweep $(app)/$(scenario) @ $${vus} VUs ($${LOAD_TEST_NAME}) ===" && \
 	    envsubst < testrun.yaml | kubectl apply -n $(NS) -f - && \
+	    rc=0 && \
 	    kubectl wait --for="jsonpath={.status.stage}=finished" \
-	      "testrun.k6.io/$${LOAD_TEST_NAME}" -n $(NS) --timeout=30m && \
-	    kubectl delete testrun -n $(NS) "$${LOAD_TEST_NAME}" --ignore-not-found && \
+	      "testrun.k6.io/$${LOAD_TEST_NAME}" -n $(NS) --timeout=30m || rc=$$?; \
+	    if [ "$$rc" -ne 0 ]; then \
+	      kubectl logs -n $(NS) -l "k6_cr=$${LOAD_TEST_NAME}" --tail=20 || true; \
+	    fi; \
+	    kubectl delete testrun -n $(NS) "$${LOAD_TEST_NAME}" --ignore-not-found || rc=$$?; \
+	    if [ "$$rc" -ne 0 ]; then echo "sweep aborted: level $${vus} did not finish"; exit 1; fi; \
 	    sleep 20; \
 	  done
 

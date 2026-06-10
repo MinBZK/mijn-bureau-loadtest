@@ -9,6 +9,7 @@ as `TestRun` CRs scheduled by the [k6-operator](https://github.com/grafana/k6-op
 ```
 scenarios/<app>/                 # k6 scripts (helpers prefixed `_`), shipped as a ConfigMap
 runs/<app>/<scenario>.env        # per-scenario env vars (sourced before envsubst)
+docs/scaling.md                  # results: per-app saturating resource + measured points
 testrun.yaml                     # single TestRun template
 networkpolicy.yaml               # per-namespace egress allow rules
 Makefile                         # setup / install / run / sweep / seed / unseed / logs / clean

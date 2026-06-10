@@ -1,8 +1,9 @@
 // One VU uploads files of increasing size, producing a per-size latency baseline.
 import { check, sleep } from "k6";
 import crypto from "k6/crypto";
+import exec from "k6/execution";
 import { validateEnv } from "./_auth.ts";
-import { mkcol, put } from "./_webdav.ts";
+import { del, mkcol, put } from "./_webdav.ts";
 
 const FOLDER = "/loadtest-upload-ladder";
 
@@ -32,11 +33,16 @@ export const options = {
 
 export function setup(): void {
   validateEnv();
-  // SIZES is indexed by per-VU __ITER; parallelism > 1 makes each runner restart at SIZES[0].
-  if (__ENV.K6_EXECUTION_SEGMENT) {
+  // SIZES is indexed by per-VU __ITER; parallelism > 1 segments the VU away and skips sizes.
+  // The operator passes segments as CLI flags only when parallelism > 1, never as an env var.
+  const segment = exec.test.options.executionSegment;
+  if (segment && segment !== "0:1") {
     throw new Error("upload-ladder requires PARALLELISM=1");
   }
-  mkcol(FOLDER); // 201 created or 405 exists; both fine
+  const res = mkcol(FOLDER);
+  if (res.status !== 201 && res.status !== 405) {
+    throw new Error(`MKCOL ${FOLDER} failed: ${res.status}`);
+  }
 }
 
 export default function (): void {
@@ -49,4 +55,10 @@ export default function (): void {
     [`PUT ${size}B → 2xx`]: (r) => r.status >= 200 && r.status < 300,
   });
   sleep(2);
+}
+
+export function teardown(): void {
+  // Removes the collection and every uploaded file; they land in the trashbin
+  // until Nextcloud purges it.
+  del(FOLDER);
 }

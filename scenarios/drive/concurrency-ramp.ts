@@ -1,13 +1,18 @@
-// Ramps concurrent VUs listing recent items via the la-suite Drive REST API (OIDC Bearer access token,
-// fetched in setup()). Drive is a Django/DRF app over Postgres; this read path is CPU + DB-bound. The
-// breaking point shows up as a jump in http_req_failed or a cliff in http_req_duration_p95 once the
-// app (after the CPU HPA reaches max replicas) or the Postgres connection pool saturates.
+// Ramps concurrent VUs listing recent items via the la-suite Drive REST API (OIDC Bearer access
+// token, fetched in setup()). recents/ is owner-scoped, so setup() seeds folders for the load-test
+// user; an empty page would only measure the auth middleware. Drive is a Django/DRF app over
+// Postgres; this read path is CPU + DB-bound. The breaking point shows up as a jump in
+// http_req_failed or a cliff in http_req_duration_p95 once the app (after the CPU HPA reaches max
+// replicas) or the Postgres connection pool saturates.
 import { check, sleep } from "k6";
 import http from "k6/http";
 import { getToken, validateEnv } from "./_auth.ts";
 import { iterationOk, iterationStart } from "./_safety.ts";
 
 const BASE_URL: string = (__ENV.TARGET_URL || "").replace(/\/$/, "");
+const API = `${BASE_URL}/api/v1.0`;
+
+const SEED_ITEMS = 25;
 
 const TARGET_VUS: number = parseInt(__ENV.TARGET_VUS || "25", 10);
 
@@ -20,7 +25,6 @@ export const options = {
         { duration: __ENV.RAMP_UP || "30s", target: TARGET_VUS },
         { duration: __ENV.HOLD || "2m", target: TARGET_VUS },
       ],
-      gracefulRampDown: __ENV.RAMP_DOWN || "30s",
     },
   },
   thresholds: {
@@ -31,12 +35,40 @@ export const options = {
 
 export function setup(): { token: string } {
   validateEnv();
-  return { token: getToken() };
+  const token = getToken();
+  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const recents = http.get(`${API}/items/recents/`, { headers });
+  if (recents.status !== 200) {
+    throw new Error(`recents list failed: ${recents.status}`);
+  }
+  const existing = (recents.json("count") as number) || 0;
+  if (existing < SEED_ITEMS) {
+    const list = http.get(`${API}/items/`, { headers });
+    if (list.status !== 200) {
+      throw new Error(`items list failed: ${list.status}`);
+    }
+    const items = (list.json("results") as { id: string; main_workspace?: boolean }[]) || [];
+    const root = items.find((i) => i.main_workspace);
+    if (!root) {
+      throw new Error("no main_workspace item for the load-test user");
+    }
+    for (let i = existing; i < SEED_ITEMS; i++) {
+      const create = http.post(
+        `${API}/items/${root.id}/children/`,
+        JSON.stringify({ type: "folder", title: `loadtest-seed-${i}` }),
+        { headers },
+      );
+      if (create.status !== 201) {
+        throw new Error(`item seed failed at ${i}: ${create.status}`);
+      }
+    }
+  }
+  return { token };
 }
 
 export default function (data: { token: string }): void {
   iterationStart();
-  const res = http.get(`${BASE_URL}/api/v1.0/items/recents/?page_size=1`, {
+  const res = http.get(`${API}/items/recents/`, {
     headers: { Authorization: `Bearer ${data.token}` },
     tags: { verb: "ITEMS" },
   });

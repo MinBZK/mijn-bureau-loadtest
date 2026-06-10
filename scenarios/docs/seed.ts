@@ -2,7 +2,7 @@
 // SEED_MODE=create (default): create up to SEED_DOC_COUNT documents — idempotent (tops up to target).
 // SEED_MODE=delete: delete every document the load test created (title prefix "loadtest-").
 // Run via `make seed app=docs` / `make unseed app=docs`.
-import { check } from "k6";
+import { check, sleep } from "k6";
 import http, { type RefinedResponse, type ResponseType } from "k6/http";
 import { getToken, validateEnv } from "./_auth.ts";
 
@@ -26,11 +26,25 @@ function authHeaders(token: string): { [k: string]: string } {
   return { Authorization: `Bearer ${token}` };
 }
 
+// Docs throttles document ops per user (default 80/min); wait out 429s instead of failing.
+function retry429(
+  fn: () => RefinedResponse<ResponseType | undefined>,
+): RefinedResponse<ResponseType | undefined> {
+  for (;;) {
+    const res = fn();
+    if (res.status !== 429) {
+      return res;
+    }
+    const wait = parseFloat(res.headers["Retry-After"]);
+    sleep(wait > 0 ? wait : 5);
+  }
+}
+
 function listAll(token: string): { id: string; title: string }[] {
   const out: { id: string; title: string }[] = [];
   let url: string | null = `${API}/documents/all/?page_size=100`;
   while (url) {
-    const res: RefinedResponse<ResponseType | undefined> = http.get(url, { headers: authHeaders(token) });
+    const res = retry429(() => http.get(url as string, { headers: authHeaders(token) }));
     if (res.status !== 200) {
       throw new Error(`list failed: ${res.status}`);
     }
@@ -52,11 +66,18 @@ export default function (data: { token: string }): void {
 
   if (MODE === "delete") {
     const docs = listAll(token).filter((d) => (d.title || "").startsWith(CLEANUP_PREFIX));
+    let deleted = 0;
     for (const d of docs) {
-      const res = http.del(`${API}/documents/${d.id}/`, null, { headers: auth });
-      check(res, { "delete ok": (r) => r.status === 204 || r.status === 200 || r.status === 404 });
+      const res = retry429(() => http.del(`${API}/documents/${d.id}/`, null, { headers: auth }));
+      const ok = check(res, {
+        "delete ok": (r) => r.status === 204 || r.status === 200 || r.status === 404,
+      });
+      if (ok) deleted++;
     }
-    console.log(`unseed: deleted ${docs.length} documents with prefix "${CLEANUP_PREFIX}"`);
+    console.log(`unseed: deleted ${deleted}/${docs.length} documents with prefix "${CLEANUP_PREFIX}"`);
+    if (deleted < docs.length) {
+      throw new Error(`unseed: ${docs.length - deleted} documents could not be deleted`);
+    }
     return;
   }
 
@@ -65,9 +86,11 @@ export default function (data: { token: string }): void {
   console.log(`seed: ${existing} existing, creating ${toCreate} to reach ${COUNT}`);
   for (let i = 0; i < toCreate; i++) {
     const idx = existing + i;
-    const create = http.post(`${API}/documents/`, JSON.stringify({ title: `${PREFIX}${idx}` }), {
-      headers: { ...auth, "Content-Type": "application/json" },
-    });
+    const create = retry429(() =>
+      http.post(`${API}/documents/`, JSON.stringify({ title: `${PREFIX}${idx}` }), {
+        headers: { ...auth, "Content-Type": "application/json" },
+      }),
+    );
     if (!check(create, { "create 201": (r) => r.status === 201 })) {
       throw new Error(`seed create failed at ${idx}: ${create.status} ${create.body}`);
     }

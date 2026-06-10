@@ -4,6 +4,7 @@
 // the limit. Auth is the same OIDC bearer as the Drive list scenario.
 import { check, sleep } from "k6";
 import crypto from "k6/crypto";
+import exec from "k6/execution";
 import http from "k6/http";
 import { getToken, validateEnv } from "./_auth.ts";
 
@@ -35,8 +36,10 @@ export const options = {
 
 export function setup(): { token: string; workspaceId: string } {
   validateEnv();
-  // SIZES is indexed by per-VU __ITER; parallelism > 1 makes each runner restart at SIZES[0].
-  if (__ENV.K6_EXECUTION_SEGMENT) {
+  // SIZES is indexed by per-VU __ITER; parallelism > 1 segments the VU away and skips sizes.
+  // The operator passes segments as CLI flags only when parallelism > 1, never as an env var.
+  const segment = exec.test.options.executionSegment;
+  if (segment && segment !== "0:1") {
     throw new Error("upload-ladder requires PARALLELISM=1");
   }
   const token = getToken();
@@ -81,6 +84,9 @@ export default function (data: { token: string; workspaceId: string }): void {
 
   // 3. finalize (best-effort; large files may exceed the server's size limit at this step)
   http.post(`${API}/items/${itemId}/upload-ended/`, null, { headers: auth, tags: { verb: "UPLOAD_ENDED" } });
+
+  // 4. clean up — soft-deletes to the trash; MinIO storage is reclaimed when the trash purges
+  http.del(`${API}/items/${itemId}/`, null, { headers: auth, tags: { verb: "DELETE" } });
 
   sleep(2);
 }

@@ -1,7 +1,8 @@
-// Ramps concurrent VUs listing orgs via the Grist REST API (Bearer API key). Grist is a Node app
-// fronting a SQLite DB per document; this read path is CPU-bound (app + event loop). The breaking
-// point shows up as a jump in http_req_failed or a cliff in http_req_duration_p95 once the app
-// (after the CPU HPA reaches max replicas) saturates.
+// Ramps concurrent VUs listing orgs via the Grist REST API (Bearer API key). /api/orgs is a light
+// home-server read: its knee is Grist's front door (Node app CPU + event loop), not the
+// per-document SQLite engine — point at /api/docs/<docId>/tables/<tableId>/records for that once a
+// load-test document exists. The sleep(1) closed loop caps offered load at ~TARGET_VUS req/s, so
+// this endpoint may need sweep levels above 100 to reach the knee.
 import { check, sleep } from "k6";
 import http from "k6/http";
 import { API_BASE, AUTH_HEADER, validateEnv } from "./_auth.ts";
@@ -18,7 +19,6 @@ export const options = {
         { duration: __ENV.RAMP_UP || "30s", target: TARGET_VUS },
         { duration: __ENV.HOLD || "2m", target: TARGET_VUS },
       ],
-      gracefulRampDown: __ENV.RAMP_DOWN || "30s",
     },
   },
   thresholds: {

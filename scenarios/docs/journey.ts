@@ -93,7 +93,6 @@ export const options = {
         { duration: __ENV.RAMP_UP || "30s", target: TARGET_VUS },
         { duration: __ENV.HOLD || "2m", target: TARGET_VUS },
       ],
-      gracefulRampDown: __ENV.RAMP_DOWN || "30s",
     },
   },
   thresholds: {
