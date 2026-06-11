@@ -13,12 +13,13 @@ help:
 	@echo "Per-namespace setup (idempotent):"
 	@echo "  make setup                                       # create namespace + apply networkpolicy"
 	@echo ""
-	@echo "Per-app setup (re-run when scripts change):"
+	@echo "Per-app setup:"
 	@echo "  make install-scenarios app=<app>                 # ship the app's scripts as a ConfigMap"
-	@echo "  (credentials Secret: see README; it varies per app)"
+	@echo "  (runs automatically before run/sweep/seed/unseed; credentials Secret: see README)"
 	@echo ""
 	@echo "Per run:"
 	@echo "  make run    app=<app> scenario=<scenario>                            # one TestRun at the env's TARGET_VUS"
+	@echo "  make run    ... vus=300 ramp=15m hold=3m                             # optional knob overrides (e.g. slow-ramp experiment)"
 	@echo "  make sweep  app=<app> scenario=<scenario> levels=\"5 25 50 75 100\"    # plateau at each level → 3-5 points"
 	@echo "  make seed   app=<app>                                                 # create the journey dataset (one-time)"
 	@echo "  make unseed app=<app>                                                 # delete the journey dataset"
@@ -35,12 +36,14 @@ install-scenarios:
 	  --from-file scenarios/$(app)/ \
 	  --dry-run=client -o yaml | kubectl apply -f -
 
-run:
-	@: $${app:?app=<name> required — run 'make help' for usage}
+run: install-scenarios
 	@: $${scenario:?scenario=<name> required — run 'make help' for usage}
 	@source runs/$(app)/$(scenario).env && \
 	  export SCENARIO=$(scenario) && \
 	  export RUN_ID=$$(date +%Y%m%d-%H%M%S) && \
+	  $(if $(vus),export TARGET_VUS="$(vus)" &&) \
+	  $(if $(ramp),export RAMP_UP="$(ramp)" &&) \
+	  $(if $(hold),export HOLD="$(hold)" &&) \
 	  for v in TARGET_URL PROMETHEUS_RW_URL LOAD_TEST_NAME PARALLELISM \
 	           SCRIPTS_CONFIGMAP SCRIPT_FILE CREDENTIALS_SECRET \
 	           RUNNER_CPU_REQUEST RUNNER_CPU_LIMIT \
@@ -55,8 +58,7 @@ run:
 # Prometheus (tagged target_vus) so the CRs are deleted after each level finishes.
 # A level that never reaches stage=finished (e.g. stage=error) still gets its CR deleted,
 # then the sweep aborts.
-sweep:
-	@: $${app:?app=<name> required — run 'make help' for usage}
+sweep: install-scenarios
 	@: $${scenario:?scenario=<name> required — run 'make help' for usage}
 	@: $${levels:?levels="5 25 50 75 100" required}
 	@source runs/$(app)/$(scenario).env && \
@@ -88,8 +90,7 @@ sweep:
 # One-time dataset provisioning for an app's journey scenario. `seed` creates up to
 # SEED_DOC_COUNT docs; `unseed` deletes everything titled with CLEANUP_PREFIX. Both run a
 # single TestRun (seed.ts) and wait for it to finish before deleting the CR.
-seed:
-	@: $${app:?app=<name> required — run 'make help' for usage}
+seed: install-scenarios
 	@source runs/$(app)/seed.env && \
 	  export SCENARIO=seed && \
 	  export RUN_ID=$$(date +%Y%m%d-%H%M%S) && \
@@ -105,8 +106,7 @@ seed:
 	  kubectl logs -n $(NS) -l "k6_cr=$$LOAD_TEST_NAME" --tail=20 && \
 	  kubectl delete testrun -n $(NS) "$$LOAD_TEST_NAME" --ignore-not-found
 
-unseed:
-	@: $${app:?app=<name> required — run 'make help' for usage}
+unseed: install-scenarios
 	@source runs/$(app)/seed.env && \
 	  export SEED_MODE=delete && \
 	  export SCENARIO=seed && \

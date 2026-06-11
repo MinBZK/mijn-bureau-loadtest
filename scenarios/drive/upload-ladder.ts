@@ -7,6 +7,7 @@ import crypto from "k6/crypto";
 import exec from "k6/execution";
 import http from "k6/http";
 import { getToken, validateEnv } from "./_auth.ts";
+import { getWorkspaceId } from "./_items.ts";
 
 const BASE_URL: string = (__ENV.TARGET_URL || "").replace(/\/$/, "");
 const API = `${BASE_URL}/api/v1.0`;
@@ -43,16 +44,7 @@ export function setup(): { token: string; workspaceId: string } {
     throw new Error("upload-ladder requires PARALLELISM=1");
   }
   const token = getToken();
-  const res = http.get(`${API}/items/`, { headers: { Authorization: `Bearer ${token}` } });
-  if (res.status !== 200) {
-    throw new Error(`Drive items list failed: ${res.status}`);
-  }
-  const items: { id: string; main_workspace?: boolean }[] = (res.json("results") as any[]) || [];
-  const root = items.find((i) => i.main_workspace);
-  if (!root) {
-    throw new Error("no main_workspace item for the load-test user");
-  }
-  return { token, workspaceId: root.id };
+  return { token, workspaceId: getWorkspaceId(token) };
 }
 
 export default function (data: { token: string; workspaceId: string }): void {

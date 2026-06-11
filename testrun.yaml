@@ -14,6 +14,8 @@ metadata:
     target_vus: "${TARGET_VUS}"
 spec:
   parallelism: ${PARALLELISM}
+  # testid drives the run picker in the k6 Grafana dashboard (19665).
+  arguments: --tag testid=${LOAD_TEST_NAME}
   script:
     configMap:
       name: ${SCRIPTS_CONFIGMAP}

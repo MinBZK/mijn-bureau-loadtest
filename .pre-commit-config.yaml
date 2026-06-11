@@ -4,6 +4,8 @@ repos:
     hooks:
       - id: end-of-file-fixer
       - id: check-yaml
+        # networkpolicy.yaml and monitoring.yaml are multi-document files
+        args: ["--allow-multiple-documents"]
       - id: check-json
       - id: check-added-large-files
         args: ["--maxkb=700"]

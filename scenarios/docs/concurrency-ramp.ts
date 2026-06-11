@@ -7,10 +7,11 @@
 // connection pool saturates.
 import { check, sleep } from "k6";
 import http from "k6/http";
-import { getToken, validateEnv } from "./_auth.ts";
+import { getTokens, refreshVuToken, type Tokens, validateEnv, vuToken } from "./_auth.ts";
 import { iterationOk, iterationStart } from "./_safety.ts";
 
 const BASE_URL: string = (__ENV.TARGET_URL || "").replace(/\/$/, "");
+const LIST_URL = `${BASE_URL}/api/v1.0/documents/?page=1`;
 
 const TARGET_VUS: number = parseInt(__ENV.TARGET_VUS || "25", 10);
 
@@ -31,11 +32,11 @@ export const options = {
   tags: { target_vus: String(TARGET_VUS) },
 };
 
-export function setup(): { token: string } {
+export function setup(): { tokens: Tokens } {
   validateEnv();
-  const token = getToken();
+  const tokens = getTokens();
   const res = http.get(`${BASE_URL}/api/v1.0/documents/?page=1`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${tokens.access}` },
   });
   if (res.status !== 200) {
     throw new Error(`docs list failed: ${res.status}`);
@@ -43,15 +44,21 @@ export function setup(): { token: string } {
   if (((res.json("results") as unknown[]) || []).length === 0) {
     throw new Error("no documents for the load-test user — run `make seed app=docs` first");
   }
-  return { token };
+  return { tokens };
 }
 
-export default function (data: { token: string }): void {
+export default function (data: { tokens: Tokens }): void {
   iterationStart();
-  const res = http.get(`${BASE_URL}/api/v1.0/documents/?page=1`, {
-    headers: { Authorization: `Bearer ${data.token}` },
+  let res = http.get(LIST_URL, {
+    headers: { Authorization: `Bearer ${vuToken(data.tokens)}` },
     tags: { verb: "DOCUMENTS" },
   });
+  if (res.status === 401) {
+    res = http.get(LIST_URL, {
+      headers: { Authorization: `Bearer ${refreshVuToken()}` },
+      tags: { verb: "DOCUMENTS" },
+    });
+  }
   const ok = check(res, {
     "documents 200": (r) => r.status === 200,
   });

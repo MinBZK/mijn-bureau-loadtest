@@ -9,9 +9,9 @@ as `TestRun` CRs scheduled by the [k6-operator](https://github.com/grafana/k6-op
 ```
 scenarios/<app>/                 # k6 scripts (helpers prefixed `_`), shipped as a ConfigMap
 runs/<app>/<scenario>.env        # per-scenario env vars (sourced before envsubst)
-docs/scaling.md                  # results: per-app saturating resource + measured points
 testrun.yaml                     # single TestRun template
 networkpolicy.yaml               # per-namespace egress allow rules
+monitoring.yaml                  # per-namespace Prometheus (remote-write receiver) + Grafana
 Makefile                         # setup / install / run / sweep / seed / unseed / logs / clean
 tsconfig.json + package.json     # TypeScript type-check (editor + pre-commit)
 ```
@@ -54,7 +54,8 @@ kubectl create secret generic loadtest-nextcloud-credentials -n loadtest \
   --from-literal NEXTCLOUD_APP_PASSWORD='<app-password>'
 ```
 
-Re-run `install-scenarios` after editing a scenario script.
+`make run`/`sweep`/`seed`/`unseed` re-ship the scripts automatically; `install-scenarios`
+exists for shipping without running.
 
 ## Daily workflow
 
@@ -114,8 +115,13 @@ Metrics ship to Prometheus via remote-write. Import the
 [official k6 dashboard](https://grafana.com/grafana/dashboards/19665) (ID `19665`).
 
 `PROMETHEUS_RW_URL` must accept remote-write. OpenShift's bundled `prometheus-k8s` does not
-(no `--web.enable-remote-write-receiver`); use Mimir/Thanos/Grafana Cloud or a sidecar
-Prometheus with the receiver flag enabled.
+(no `--web.enable-remote-write-receiver`), so `monitoring.yaml` deploys a per-namespace
+Prometheus (receiver enabled) + Grafana with the datasource provisioned:
+
+```bash
+kubectl apply -n loadtest -f monitoring.yaml
+kubectl port-forward -n loadtest svc/grafana 3000:3000   # then import dashboard 19665
+```
 
 ## OpenShift notes
 
@@ -127,3 +133,7 @@ non-numeric `USER` on clusters without that mutator (e.g. kind).
 `networkpolicy.yaml` allows egress for DNS, intra-namespace 6565 (k6-operator
 starter↔runner), HTTPS (target apps + remote-write), and 9090 (sidecar Prometheus). Add a
 rule if your remote-write endpoint listens elsewhere.
+
+Tenant namespaces cap `limits.cpu` per namespace (e.g. 1875m, of which `monitoring.yaml`
+takes 750m). The initializer/runner pods inherit `RUNNER_CPU_LIMIT` — keep it at 1 or pod
+creation is refused with `exceeded quota`.

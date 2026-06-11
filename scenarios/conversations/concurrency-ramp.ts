@@ -7,11 +7,12 @@
 // connection pool saturates.
 import { check, sleep } from "k6";
 import http from "k6/http";
-import { getToken, validateEnv } from "./_auth.ts";
+import { getTokens, refreshVuToken, type Tokens, validateEnv, vuToken } from "./_auth.ts";
 import { iterationOk, iterationStart } from "./_safety.ts";
 
 const BASE_URL: string = (__ENV.TARGET_URL || "").replace(/\/$/, "");
 const API = `${BASE_URL}/api/v1.0`;
+const LIST_URL = `${API}/chats/`;
 
 const SEED_CHATS = 25;
 
@@ -34,10 +35,10 @@ export const options = {
   tags: { target_vus: String(TARGET_VUS) },
 };
 
-export function setup(): { token: string } {
+export function setup(): { tokens: Tokens } {
   validateEnv();
-  const token = getToken();
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const tokens = getTokens();
+  const headers = { Authorization: `Bearer ${tokens.access}`, "Content-Type": "application/json" };
   const res = http.get(`${API}/chats/?title=loadtest-seed`, { headers });
   if (res.status !== 200) {
     throw new Error(`chats list failed: ${res.status}`);
@@ -51,15 +52,21 @@ export function setup(): { token: string } {
       throw new Error(`chat seed failed at ${i}: ${create.status}`);
     }
   }
-  return { token };
+  return { tokens };
 }
 
-export default function (data: { token: string }): void {
+export default function (data: { tokens: Tokens }): void {
   iterationStart();
-  const res = http.get(`${API}/chats/`, {
-    headers: { Authorization: `Bearer ${data.token}` },
+  let res = http.get(LIST_URL, {
+    headers: { Authorization: `Bearer ${vuToken(data.tokens)}` },
     tags: { verb: "CHATS" },
   });
+  if (res.status === 401) {
+    res = http.get(LIST_URL, {
+      headers: { Authorization: `Bearer ${refreshVuToken()}` },
+      tags: { verb: "CHATS" },
+    });
+  }
   const ok = check(res, {
     "chats 200": (r) => r.status === 200,
   });
