@@ -33,6 +33,16 @@ export function put(
   });
 }
 
+export function del(
+  path: string,
+  extraTags: Tags = {},
+): RefinedResponse<ResponseType | undefined> {
+  return http.del(`${DAV_BASE}${path}`, null, {
+    headers: headers(),
+    tags: { verb: "DELETE", ...extraTags },
+  });
+}
+
 export function propfind(
   path: string = "",
   depth: "0" | "1" | "infinity" = "0",
